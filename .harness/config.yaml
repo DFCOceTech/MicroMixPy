@@ -1,0 +1,172 @@
+# Agentic Refactor Harness Configuration
+# See: agentic-refactor-prompt.md for full documentation
+harness:
+  max_retries_per_sprint: 3
+  max_total_iterations: 15
+  context_reset_strategy: "full"
+
+  directories:
+    handoffs: ".harness/handoffs/"
+    contracts: ".harness/contracts/"
+    evaluations: ".harness/evaluations/"
+    prompts: ".harness/prompts/"
+
+  agents:
+    discovery:
+      model: "claude-sonnet-4-6"
+      mode: "auto"
+      effort: "medium"
+      prompt: ".harness/prompts/discovery.md"
+      tools: ["Read", "Grep", "Glob", "WebSearch", "WebFetch"]
+      invocation: "conditional"
+      max_turns: 20
+      max_budget_usd: 2.00
+      reads: ["_bmad/", "openspec/", "docs/"]
+      writes: ["_bmad/product-brief.md", ".harness/handoffs/"]
+
+    planner:
+      model: "claude-sonnet-4-6"
+      mode: "auto"
+      effort: "medium"
+      prompt: ".harness/prompts/planner.md"
+      tools: ["Read", "Grep", "Glob", "Write"]
+      invocation: "always"
+      max_turns: 30
+      max_budget_usd: 5.00
+      reads: ["_bmad/", "openspec/", "epics/", ".harness/handoffs/"]
+      writes: ["epics/", "openspec/change-proposals/"]
+
+    architect:
+      model: "claude-opus-4-6"
+      mode: "auto"
+      effort: "high"
+      prompt: ".harness/prompts/architect.md"
+      tools: ["Read", "Grep", "Glob", "Write"]
+      invocation: "conditional"
+      max_turns: 25
+      max_budget_usd: 10.00
+      reads: ["_bmad/", "openspec/"]
+      writes: ["_bmad/architecture.md", "openspec/capabilities/*/design.md"]
+
+    design:
+      model: "claude-sonnet-4-6"
+      mode: "auto"
+      effort: "medium"
+      prompt: ".harness/prompts/design.md"
+      tools: ["Read", "Grep", "Glob", "Write"]
+      invocation: "conditional"
+      max_turns: 20
+      max_budget_usd: 3.00
+      reads: ["_bmad/", "openspec/", ".harness/evaluations/"]
+      writes: ["_bmad/ux-spec.md"]
+
+    generator:
+      model: "claude-opus-4-6"
+      mode: "auto"
+      effort: "high"
+      prompt: ".harness/prompts/generator.md"
+      tools: ["Read", "Edit", "Write", "Grep", "Glob", "Bash"]
+      invocation: "always"
+      max_turns: 100
+      max_budget_usd: 50.00
+      max_session_duration: "2h"
+      reads: ["openspec/", "epics/stories/", "_bmad/ux-spec.md", ".harness/contracts/", ".harness/handoffs/"]
+      writes: ["src/", "notebooks/", "tests/", "data/processed/", "figures/", "openspec/capabilities/*/spec.md", ".harness/handoffs/"]
+
+    evaluator:
+      model: "claude-opus-4-6"
+      mode: "auto"
+      effort: "high"
+      prompt: ".harness/prompts/evaluator.md"
+      tools: ["Read", "Grep", "Glob", "Bash"]
+      invocation: "always"
+      skepticism_level: "high"
+      max_turns: 50
+      max_budget_usd: 20.00
+      reads: ["openspec/", "epics/stories/", "_bmad/ux-spec.md", ".harness/contracts/", "ops/e2e-test-plan.md"]
+      writes: [".harness/evaluations/", "ops/test-results.md"]
+
+    adversarial:
+      model: "claude-opus-4-6"
+      mode: "auto"
+      effort: "high"
+      prompt: ".harness/prompts/adversarial.md"
+      tools: ["Read", "Grep", "Glob", "Bash"]
+      invocation: "conditional"  # Gate 4 — runs after Gate 3 for non-trivial changes
+      skepticism_level: "maximum"
+      max_turns: 40
+      max_budget_usd: 15.00
+      # Triggers — orchestrator runs Gate 4 if any are true
+      triggers:
+        min_lines_changed: 50
+        # {{FILL: paths where changes should always trigger Gate 4 —
+        # e.g., credential-loading code, data download scripts, any module
+        # that reads from external APIs or writes to data/processed/.}}
+        security_relevant_paths: []
+        always_on_capabilities: true   # any change adding/modifying a capability spec
+        always_on_milestone: true      # any change marked as milestone in handoff
+      can_override_evaluator: true
+      reads:
+        - "_bmad/agents/adversarial-reviewer.md"
+        - "ops/metrics.md"
+        - "ops/changelog.md"
+        - "ops/status.md"
+        - "ops/test-results.md"
+        - "CLAUDE.md"
+        - ".harness/contracts/"
+        - ".harness/evaluations/"
+        - ".harness/handoffs/"
+        - "openspec/"
+        - "epics/stories/"
+        - "src/"
+        - "tests/"
+      writes: [".harness/evaluations/"]   # only the adversarial verdict YAML
+
+  coverage:
+    spec_coverage:
+      req_implemented_must_be_tested: true
+      scenario_pass_rate_threshold: 0.90
+      critical_scenario_pass_rate: 1.00
+    code_coverage:
+      tool: "{{FILL: pytest-cov}}"
+      minimum_line_coverage_new_files: 0.80
+      minimum_branch_coverage_new_files: 0.70
+      no_regression: true
+      report_path: "coverage/"
+      fail_sprint_on_violation: true
+
+  evaluation_criteria:
+    - name: "Spec Fidelity"
+      weight: 0.25
+      hard_fail: "spec contradicted without rationale"
+    - name: "Functional Completeness"
+      weight: 0.25
+      hard_fail: "critical SCENARIO-* fails"
+    - name: "Analysis Correctness"
+      weight: 0.20
+      hard_fail: "analysis produces wrong outputs or E2E execution fails"
+    - name: "Reproducibility"
+      weight: 0.10
+      hard_fail: "re-execution produces different outputs without documented tolerance"
+    - name: "Conformance Accuracy"
+      weight: 0.10
+      hard_fail: "false positive or false negative in conformance assertions"
+      description: "Only applies when the product is a test suite or compliance tool."
+      conditional: true
+    - name: "Code Quality"
+      weight: 0.10
+    - name: "Robustness"
+      weight: 0.10
+      hard_fail: "data loss, raw data mutation, or leaked credentials"
+
+  # Conformance fixture testing — only for projects that ARE test suites.
+  # If your product validates other systems' compliance, configure these.
+  # The evaluator uses these to detect false positives and false negatives.
+  # conformance_fixtures:
+  #   known_good_servers:
+  #     - name: "Reference Implementation"
+  #       url: "https://example.com/api"
+  #       description: "Known-conformant server for validating test assertions"
+  #   known_bad_fixtures:
+  #     path: "tests/fixtures/"
+  #     description: "Mock responses with intentional spec violations"
