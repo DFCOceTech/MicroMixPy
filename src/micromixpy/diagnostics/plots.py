@@ -39,16 +39,32 @@ def _depth_axis(ax: plt.Axes, label: str = "Pressure (dbar)") -> None:
     ax.set_ylabel(label)
 
 
-def _gade_line(T_AW: float, S_AW: float, T_ice: float = -2.0) -> tuple[np.ndarray, np.ndarray]:
+def _gade_line(
+    T_AW: float, S_AW: float, T_ice: float = -2.0,
+    S_min: float | None = None, S_max: float | None = None,
+) -> tuple[np.ndarray, np.ndarray]:
     """Compute the Gade (1979) glacial meltwater mixing line in T-S space.
 
     T_FW = T_ice − L_ice / c_pw  (effective freshwater temperature)
     T(S) = T_FW + (T_AW − T_FW) · S / S_AW
+
+    S_min/S_max clip the line to the visible data range.
     """
     T_FW = T_ice - _L_ICE / _C_PW
-    S_range = np.linspace(0, S_AW, 200)
+    lo = S_min if S_min is not None else 0.0
+    hi = S_max if S_max is not None else S_AW
+    S_range = np.linspace(lo, hi, 200)
     T_range = T_FW + (T_AW - T_FW) * S_range / S_AW
     return S_range, T_range
+
+
+def _ts_bounds(SA: np.ndarray, CT: np.ndarray, pad: float = 0.05) -> tuple[float, float, float, float]:
+    """Return (S_lo, S_hi, T_lo, T_hi) padded by *pad* fraction of range."""
+    S_lo, S_hi = float(np.nanmin(SA)), float(np.nanmax(SA))
+    T_lo, T_hi = float(np.nanmin(CT)), float(np.nanmax(CT))
+    S_pad = max((S_hi - S_lo) * pad, 1e-3)
+    T_pad = max((T_hi - T_lo) * pad, 1e-3)
+    return S_lo - S_pad, S_hi + S_pad, T_lo - T_pad, T_hi + T_pad
 
 
 # ─── individual plot functions ─────────────────────────────────────────────────
@@ -84,11 +100,14 @@ def plot_ts_gade(
     if T_AW is None:
         T_AW = float(CT[np.nanargmax(SA)])
 
+    S_lo, S_hi, T_lo, T_hi = _ts_bounds(SA, CT)
     fig, ax = plt.subplots(figsize=(5, 5))
     ax.plot(SA, CT, "k.", ms=3, alpha=0.6, label="Profile")
-    S_g, T_g = _gade_line(T_AW, S_AW, T_ice)
+    S_g, T_g = _gade_line(T_AW, S_AW, T_ice, S_min=S_lo, S_max=S_hi)
     ax.plot(S_g, T_g, "b--", lw=1.5, label=f"Gade line (T_ice={T_ice}°C)")
     ax.plot(S_AW, T_AW, "r*", ms=10, label=f"AW end-member ({T_AW:.1f}°C, {S_AW:.1f} g/kg)")
+    ax.set_xlim(S_lo, S_hi)
+    ax.set_ylim(T_lo, T_hi)
     ax.set_xlabel("Absolute Salinity (g/kg)")
     ax.set_ylabel("Conservative Temperature (°C)")
     ax.set_title(f"T-S + Gade line — {ds.attrs.get('station_name', '')}")
@@ -116,14 +135,17 @@ def plot_ts_scalar(
     if T_AW is None:
         T_AW = float(CT[np.nanargmax(SA)])
 
+    S_lo, S_hi, T_lo, T_hi = _ts_bounds(SA, CT)
     c_vals = scalar.copy().astype(float)
-    norm = mcolors.LogNorm(vmin=np.nanmin(c_vals[c_vals > 0]),
-                           vmax=np.nanmax(c_vals)) if log_scale else None
+    pos = c_vals[np.isfinite(c_vals) & (c_vals > 0)]
+    norm = mcolors.LogNorm(vmin=pos.min(), vmax=pos.max()) if log_scale and len(pos) else None
 
     fig, ax = plt.subplots(figsize=(5.5, 5))
     sc = ax.scatter(SA, CT, c=c_vals, cmap=cmap, s=10, norm=norm, zorder=3)
-    S_g, T_g = _gade_line(T_AW, S_AW, T_ice)
+    S_g, T_g = _gade_line(T_AW, S_AW, T_ice, S_min=S_lo, S_max=S_hi)
     ax.plot(S_g, T_g, "k--", lw=1, alpha=0.6, label="Gade line")
+    ax.set_xlim(S_lo, S_hi)
+    ax.set_ylim(T_lo, T_hi)
     plt.colorbar(sc, ax=ax, label=scalar_var.replace("_", " "))
     ax.set_xlabel("Absolute Salinity (g/kg)")
     ax.set_ylabel("Conservative Temperature (°C)")
