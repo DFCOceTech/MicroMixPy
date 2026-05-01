@@ -28,6 +28,7 @@ def process_downcast(
     dz_bin: float = 0.25,
     dz_eps: float = 2.0,
     nperseg: int = 512,
+    exclude_above_dbar: float = 0.0,
 ) -> dict[str, Any]:
     """Run the full processing chain on one Downcast and return a result dict.
 
@@ -81,15 +82,21 @@ def process_downcast(
     depth_eps, eps1, flag1 = compute_epsilon_profile(
         dc.sh1, dc.P_fast, dc.W_fast, mat.fs_fast,
         accel_flag=dc.accel_flag, dz=dz_eps, nperseg=nperseg,
+        exclude_above_dbar=exclude_above_dbar,
     )
     _, eps2, flag2 = compute_epsilon_profile(
         dc.sh2, dc.P_fast, dc.W_fast, mat.fs_fast,
         accel_flag=dc.accel_flag, dz=dz_eps, nperseg=nperseg,
+        exclude_above_dbar=exclude_above_dbar,
     )
 
     # 7. Chi from calibrated FP07 temperatures
-    _, chi1 = compute_chi_profile(T1_cal, dc.P_fast, dc.W_fast, mat.fs_fast, accel_flag=dc.accel_flag, dz=dz_eps, nperseg=nperseg)
-    _, chi2 = compute_chi_profile(T2_cal, dc.P_fast, dc.W_fast, mat.fs_fast, accel_flag=dc.accel_flag, dz=dz_eps, nperseg=nperseg)
+    _, chi1 = compute_chi_profile(T1_cal, dc.P_fast, dc.W_fast, mat.fs_fast,
+        accel_flag=dc.accel_flag, dz=dz_eps, nperseg=nperseg,
+        exclude_above_dbar=exclude_above_dbar)
+    _, chi2 = compute_chi_profile(T2_cal, dc.P_fast, dc.W_fast, mat.fs_fast,
+        accel_flag=dc.accel_flag, dz=dz_eps, nperseg=nperseg,
+        exclude_above_dbar=exclude_above_dbar)
 
     # 8. Best estimate epsilon
     eps_best = best_epsilon_estimate(eps1, eps2, method="minimum")

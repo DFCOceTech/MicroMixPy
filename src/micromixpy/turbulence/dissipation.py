@@ -20,6 +20,7 @@ def compute_epsilon_profile(
     dz: float = 2.0,
     nu: float = _NU,
     nperseg: int = 512,
+    exclude_above_dbar: float = 0.0,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     """Compute epsilon profile from one shear probe using Nasmyth spectral fitting.
 
@@ -28,14 +29,17 @@ def compute_epsilon_profile(
 
     Parameters
     ----------
-    shear      : physical shear (s^-1) — already calibrated by ODAS quicklook
-    P          : pressure (dbar) at fast rate
-    W          : fall speed (m/s) at fast rate
-    fs         : fast sampling rate (Hz)
-    accel_flag : boolean mask — True where terminal velocity not yet reached
-    dz         : depth bin size (dbar) for epsilon segmentation
-    nu         : kinematic viscosity (m²/s)
-    nperseg    : Welch segment length (samples)
+    shear              : physical shear (s^-1) — already calibrated by ODAS quicklook
+    P                  : pressure (dbar) at fast rate
+    W                  : fall speed (m/s) at fast rate
+    fs                 : fast sampling rate (Hz)
+    accel_flag         : boolean mask — True where terminal velocity not yet reached
+    dz                 : depth bin size (dbar) for epsilon segmentation
+    nu                 : kinematic viscosity (m²/s)
+    nperseg            : Welch segment length (samples)
+    exclude_above_dbar : bins with center pressure ≤ this value are set to NaN.
+                         Use to exclude ship-hull-generated turbulence near the surface.
+                         Default 0.0 (no exclusion). Units: dbar (≈ m for shallow water).
 
     Returns
     -------
@@ -64,6 +68,9 @@ def compute_epsilon_profile(
     min_samples = max(64, nperseg // 2)
 
     for j, (lo, hi) in enumerate(zip(edges[:-1], edges[1:])):
+        if centers[j] <= exclude_above_dbar:
+            continue  # leave NaN — ship-hull turbulence exclusion zone
+
         seg = (P >= lo) & (P < hi) & np.isfinite(shear) & (W > 0.05)
         if accel_flag[seg].any():
             flag_out[j] = True
@@ -98,6 +105,7 @@ def compute_chi_profile(
     dz: float = 2.0,
     kappa_T: float = _KAPPA_T,
     nperseg: int = 512,
+    exclude_above_dbar: float = 0.0,
 ) -> tuple[np.ndarray, np.ndarray]:
     """Compute chi (thermal variance dissipation) profile from calibrated temperature.
 
@@ -105,11 +113,12 @@ def compute_chi_profile(
 
     Parameters
     ----------
-    T_cal  : calibrated fast temperature (°C)
-    P      : pressure (dbar) at fast rate
-    W      : fall speed (m/s) at fast rate
-    fs     : fast sampling rate (Hz)
-    dz     : depth bin size for segmentation
+    T_cal              : calibrated fast temperature (°C)
+    P                  : pressure (dbar) at fast rate
+    W                  : fall speed (m/s) at fast rate
+    fs                 : fast sampling rate (Hz)
+    dz                 : depth bin size for segmentation
+    exclude_above_dbar : bins with center pressure ≤ this value are set to NaN.
 
     Returns
     -------
@@ -133,6 +142,9 @@ def compute_chi_profile(
     min_samples = max(64, nperseg // 2)
 
     for j, (lo, hi) in enumerate(zip(edges[:-1], edges[1:])):
+        if centers[j] <= exclude_above_dbar:
+            continue  # leave NaN — ship-hull turbulence exclusion zone
+
         seg = (P >= lo) & (P < hi) & np.isfinite(T_cal) & (W > 0.05)
         seg_clean = seg & ~accel_flag
         if seg_clean.sum() < min_samples:

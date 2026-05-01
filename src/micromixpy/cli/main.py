@@ -30,6 +30,9 @@ def _build_parser() -> argparse.ArgumentParser:
     proc.add_argument("--dz-bin", type=float, default=0.25, help="Bin size for slow profiles (dbar)")
     proc.add_argument("--dz-eps", type=float, default=2.0, help="Segment size for epsilon computation (dbar)")
     proc.add_argument("--nperseg", type=int, default=512, help="Welch segment length (samples, default 512=1s at 512Hz)")
+    proc.add_argument("--exclude-above", type=float, default=0.0, metavar="DBAR",
+                      help="Exclude epsilon/chi bins at or above this pressure (dbar ≈ m). "
+                           "Use to remove ship-hull-generated turbulence near the surface.")
     proc.add_argument("--skip-missing-meta", action="store_true",
                       help="Warn but continue if a profile has no metadata entry")
 
@@ -109,6 +112,7 @@ def _cmd_process(args: argparse.Namespace) -> int:
                     dz_bin=args.dz_bin,
                     dz_eps=args.dz_eps,
                     nperseg=args.nperseg,
+                    exclude_above_dbar=args.exclude_above,
                 )
                 out_path = output_dir / f"{mat.file_stem}_P{dc.profile_number:02d}_{station}.nc"
                 write_profile_netcdf(out_path, result, profile_meta)
