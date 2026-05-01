@@ -142,6 +142,6 @@ class TestExcludeAboveDbar:
         W = np.full(n, 0.6)
         T = np.linspace(5.0, 0.5, n) + rng.normal(0, 0.01, n)
         threshold = 15.0
-        depth_chi, chi = compute_chi_profile(T, P, W, fs=512.0, dz=2.0, nperseg=512,
-                                              exclude_above_dbar=threshold)
+        depth_chi, chi, _ = compute_chi_profile(T, P, W, fs=512.0, dz=2.0, nperseg=512,
+                                               exclude_above_dbar=threshold)
         assert np.all(np.isnan(chi[depth_chi <= threshold]))

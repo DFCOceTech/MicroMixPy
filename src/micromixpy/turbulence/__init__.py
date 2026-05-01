@@ -1,5 +1,6 @@
 from .nasmyth import nasmyth_spectrum, fit_epsilon
 from .spectra import shear_psd, temperature_gradient_psd
+from .batchelor import batchelor_spectrum, batchelor_wavenumber, fit_batchelor
 from .dissipation import compute_epsilon_profile, compute_chi_profile, best_epsilon_estimate
 
 __all__ = [

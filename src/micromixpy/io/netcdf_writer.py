@@ -91,6 +91,8 @@ def write_profile_netcdf(
             ("eps_best", {"units": "W kg-1", "long_name": "best-estimate epsilon (minimum of eps1, eps2)"}),
             ("chi1", {"units": "K2 s-1", "long_name": "chi from FP07 thermistor 1"}),
             ("chi2", {"units": "K2 s-1", "long_name": "chi from FP07 thermistor 2"}),
+            ("eps_batchelor1", {"units": "W kg-1", "long_name": "epsilon from Batchelor fit of FP07 T1 gradient spectrum"}),
+            ("eps_batchelor2", {"units": "W kg-1", "long_name": "epsilon from Batchelor fit of FP07 T2 gradient spectrum"}),
             ("eps_accel_flag", {"units": "1", "long_name": "epsilon bin contaminated by acceleration"}),
         ]:
             if name in result:

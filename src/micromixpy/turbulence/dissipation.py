@@ -6,6 +6,7 @@ import numpy as np
 
 from .nasmyth import fit_epsilon
 from .spectra import shear_psd, temperature_gradient_psd
+from .batchelor import fit_batchelor
 
 _NU = 1.0e-6     # kinematic viscosity (m²/s)
 _KAPPA_T = 1.4e-7  # thermal diffusivity (m²/s)
@@ -106,10 +107,19 @@ def compute_chi_profile(
     kappa_T: float = _KAPPA_T,
     nperseg: int = 512,
     exclude_above_dbar: float = 0.0,
-) -> tuple[np.ndarray, np.ndarray]:
+    method: str = "batchelor",
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     """Compute chi (thermal variance dissipation) profile from calibrated temperature.
 
-    chi = 6 * kappa_T * integral(phi_dT/dz dk)
+    Two methods are available via the `method` parameter:
+
+    - 'batchelor' (default): Fit the Batchelor (1959) spectral shape to the
+      observed temperature gradient PSD. Returns both chi and an independent
+      epsilon estimate (eps_batchelor) from the Batchelor rolloff wavenumber.
+      eps_batchelor is NaN when the rolloff wavenumber exceeds 50% of Nyquist.
+
+    - 'direct': Integrate the observed PSD directly:
+      chi = 6 · κ_T · ∫ Φ_dT/dz dk.  eps_batchelor is all NaN.
 
     Parameters
     ----------
@@ -117,13 +127,15 @@ def compute_chi_profile(
     P                  : pressure (dbar) at fast rate
     W                  : fall speed (m/s) at fast rate
     fs                 : fast sampling rate (Hz)
-    dz                 : depth bin size for segmentation
-    exclude_above_dbar : bins with center pressure ≤ this value are set to NaN.
+    dz                 : depth bin size for segmentation (dbar)
+    exclude_above_dbar : bins with center pressure ≤ this value are set to NaN
+    method             : 'batchelor' (default) or 'direct'
 
     Returns
     -------
-    depth_chi : bin-center depths (dbar)
-    chi       : thermal variance dissipation (K²/s)
+    depth_chi     : bin-center depths (dbar)
+    chi           : thermal variance dissipation (K²/s)
+    eps_batchelor : TKE dissipation from Batchelor k_B (W/kg); NaN for 'direct'
     """
     if accel_flag is None:
         accel_flag = np.zeros(len(P), dtype=bool)
@@ -139,6 +151,7 @@ def compute_chi_profile(
     n_bins = len(centers)
 
     chi = np.full(n_bins, np.nan)
+    eps_batchelor = np.full(n_bins, np.nan)
     min_samples = max(64, nperseg // 2)
 
     for j, (lo, hi) in enumerate(zip(edges[:-1], edges[1:])):
@@ -157,15 +170,26 @@ def compute_chi_profile(
             continue
 
         try:
-            k, phi_dTdz = temperature_gradient_psd(T_seg, P[seg_clean], W_seg, fs, nperseg=nperseg_use)
-            valid = np.isfinite(phi_dTdz)
-            if valid.sum() < 3:
+            k, phi_dTdz = temperature_gradient_psd(
+                T_seg, P[seg_clean], W_seg, fs, nperseg=nperseg_use
+            )
+            valid = np.isfinite(phi_dTdz) & (phi_dTdz > 0)
+            if valid.sum() < 5:
                 continue
-            chi[j] = 6.0 * kappa_T * float(np.trapezoid(phi_dTdz[valid], k[valid]))
+
+            if method == "batchelor":
+                k_nyquist = float(k[-1])
+                chi_fit, eps_fit = fit_batchelor(
+                    k[valid], phi_dTdz[valid], k_nyquist=k_nyquist, kappa_T=kappa_T
+                )
+                chi[j] = chi_fit
+                eps_batchelor[j] = eps_fit
+            else:
+                chi[j] = 6.0 * kappa_T * float(np.trapezoid(phi_dTdz[valid], k[valid]))
         except Exception:
             pass
 
-    return centers, chi
+    return centers, chi, eps_batchelor
 
 
 def best_epsilon_estimate(

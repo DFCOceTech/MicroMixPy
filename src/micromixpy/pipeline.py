@@ -29,6 +29,7 @@ def process_downcast(
     dz_eps: float = 2.0,
     nperseg: int = 512,
     exclude_above_dbar: float = 0.0,
+    chi_method: str = "batchelor",
 ) -> dict[str, Any]:
     """Run the full processing chain on one Downcast and return a result dict.
 
@@ -91,12 +92,16 @@ def process_downcast(
     )
 
     # 7. Chi from calibrated FP07 temperatures
-    _, chi1 = compute_chi_profile(T1_cal, dc.P_fast, dc.W_fast, mat.fs_fast,
+    _, chi1, eps_batchelor1 = compute_chi_profile(
+        T1_cal, dc.P_fast, dc.W_fast, mat.fs_fast,
         accel_flag=dc.accel_flag, dz=dz_eps, nperseg=nperseg,
-        exclude_above_dbar=exclude_above_dbar)
-    _, chi2 = compute_chi_profile(T2_cal, dc.P_fast, dc.W_fast, mat.fs_fast,
+        exclude_above_dbar=exclude_above_dbar, method=chi_method,
+    )
+    _, chi2, eps_batchelor2 = compute_chi_profile(
+        T2_cal, dc.P_fast, dc.W_fast, mat.fs_fast,
         accel_flag=dc.accel_flag, dz=dz_eps, nperseg=nperseg,
-        exclude_above_dbar=exclude_above_dbar)
+        exclude_above_dbar=exclude_above_dbar, method=chi_method,
+    )
 
     # 8. Best estimate epsilon
     eps_best = best_epsilon_estimate(eps1, eps2, method="minimum")
@@ -143,5 +148,7 @@ def process_downcast(
         "eps_best": eps_best,
         "chi1": chi1,
         "chi2": chi2,
+        "eps_batchelor1": eps_batchelor1,
+        "eps_batchelor2": eps_batchelor2,
         "eps_accel_flag": accel_flag_eps.astype(float),
     }

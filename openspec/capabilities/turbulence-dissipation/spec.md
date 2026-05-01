@@ -2,7 +2,7 @@
 
 **Capability ID**: turbulence-dissipation  
 **Status**: In Development  
-**Last Updated**: 2026-05-01
+**Last Updated**: 2026-05-01 (REQ-TDISS-005 added)
 
 ---
 
@@ -42,6 +42,40 @@ When the returned epsilon profile is inspected,
 Then bins with center depth > 10 dbar SHALL be identical to the
 result with `exclude_above_dbar=0`.
 
+### REQ-TDISS-005 — Chi via Batchelor spectrum fitting (default)
+`compute_chi_profile` SHALL support two methods via a `method` parameter:
+
+- **`'batchelor'` (default)**: Fit the Batchelor (1959) temperature gradient spectrum
+  to the observed PSD to jointly estimate chi and an independent epsilon (eps_batchelor).
+  Uses the Oakey (1982) spectral shape with q = 3.7.
+  Formula: Φ_B(k) = chi/(6·κ_T·k_B) · 2q·(k/k_B)·exp(−q·(k/k_B)²)
+  where k_B = (ε/(ν·κ_T²))^(1/4)/(2π) is the Batchelor wavenumber.
+  Fitting is performed in log-space over (chi, eps) using bounded minimization.
+
+- **`'direct'`**: Integrate the observed PSD: chi = 6·κ_T·∫Φ dk (prior behaviour).
+
+The return signature SHALL be `(depth, chi, eps_batchelor)`.
+`eps_batchelor` is NaN for the `'direct'` method.
+
+### REQ-TDISS-006 — Batchelor eps reliability flag
+When the fitted Batchelor wavenumber k_B exceeds 50% of the Nyquist wavenumber,
+`eps_batchelor` for that bin SHALL be set to NaN (spectral rolloff not observed).
+chi is still returned if the fit converged.
+
+---
+
+## Scenarios
+
+### SCENARIO-TDISS-005-A — Batchelor recovers known chi from synthetic spectrum
+Given a synthetic Batchelor spectrum with known chi and eps,
+When fit_batchelor is applied,
+Then the recovered chi is within 0.5 log-decades of the true value.
+
+### SCENARIO-TDISS-005-B — Batchelor eps is NaN above Nyquist cutoff
+Given a depth bin where the Batchelor wavenumber exceeds 50% of Nyquist,
+When compute_chi_profile is called with method='batchelor',
+Then eps_batchelor for that bin SHALL be NaN.
+
 ---
 
 ## Implementation Status
@@ -52,3 +86,5 @@ result with `exclude_above_dbar=0`.
 | REQ-TDISS-002 | ✅ Implemented | `dissipation.py::compute_chi_profile` |
 | REQ-TDISS-003 | ✅ Implemented | `dissipation.py::best_epsilon_estimate` |
 | REQ-TDISS-004 | ✅ Implemented | `exclude_above_dbar` param, `--exclude-above` CLI |
+| REQ-TDISS-005 | ✅ Implemented | `batchelor.py`, `method` param in `compute_chi_profile` |
+| REQ-TDISS-006 | ✅ Implemented | k_B > 0.5*k_Nyquist → eps_batchelor = NaN |
