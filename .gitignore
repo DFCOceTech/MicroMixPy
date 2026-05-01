@@ -58,6 +58,10 @@ figures/
 *.nc
 *.mat
 
+# Local-only files
+old_python/
+requirements.md
+
 # Test artifacts
 .pytest_cache/
 .mypy_cache/
