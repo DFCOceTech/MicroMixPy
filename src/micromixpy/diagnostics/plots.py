@@ -299,6 +299,119 @@ def _shade_regions(
                    label=label if i == 0 else "_nolegend_")
 
 
+# ─── multipanel profile overview ──────────────────────────────────────────────
+
+def plot_profile_overview(ds: xr.Dataset) -> plt.Figure:
+    """REQ-PLOT-010: six-panel vertical profile overview.
+
+    Panels (left to right):
+      1. Temperature — FP07 T1/T2 (fast grid) + JAC-T (slow grid)
+      2. Absolute Salinity (binned)
+      3. Potential density anomaly σ₀ (binned)
+      4. ε best-estimate (log x-axis, eps grid)
+      5. Turbidity (binned)
+      6. Chlorophyll-a (binned)
+    """
+    fig, axes = plt.subplots(1, 6, figsize=(16, 8), sharey=True)
+    station = ds.attrs.get("station_name", "")
+
+    # ── helpers ──
+    def _zf():
+        return ds["depth_fast"].values if "depth_fast" in ds else None
+
+    def _zs():
+        return ds["depth_slow"].values if "depth_slow" in ds else None
+
+    def _zb():
+        return ds["depth_bin"].values if "depth_bin" in ds else None
+
+    def _ze():
+        return ds["depth_eps"].values if "depth_eps" in ds else None
+
+    def _get(name):
+        return ds[name].values if name in ds else None
+
+    # ── panel 1: temperature ──
+    ax = axes[0]
+    zf, zs = _zf(), _zs()
+    if zf is not None:
+        for var, label, color in [("T1_cal", "FP07 T1", "#e6194b"),
+                                   ("T2_cal", "FP07 T2", "#4363d8")]:
+            v = _get(var)
+            if v is not None:
+                ax.plot(v, zf, lw=0.6, color=color, alpha=0.7, label=label)
+    if zs is not None:
+        v = _get("JAC_T")
+        if v is not None:
+            ax.plot(v, zs, lw=1.2, color="k", label="JAC-T")
+    ax.set_xlabel("Temperature (°C)")
+    ax.legend(fontsize=7, loc="lower right")
+    ax.grid(True, alpha=0.25)
+
+    # ── panel 2: salinity ──
+    ax = axes[1]
+    zb = _zb()
+    v = _get("SA_bin") if zb is not None else _get("SA")
+    z = zb if zb is not None else _zs()
+    if v is not None and z is not None:
+        ax.plot(v, z, color="#3cb44b", lw=1.5)
+    ax.set_xlabel("Absolute Salinity (g/kg)")
+    ax.grid(True, alpha=0.25)
+
+    # ── panel 3: density ──
+    ax = axes[2]
+    v = _get("sigma0_bin") if zb is not None else _get("sigma0")
+    z = zb if zb is not None else _zs()
+    if v is not None and z is not None:
+        ax.plot(v, z, color="#f58231", lw=1.5)
+    ax.set_xlabel("σ₀ (kg m⁻³)")
+    ax.grid(True, alpha=0.25)
+
+    # ── panel 4: epsilon (log) ──
+    ax = axes[3]
+    ze = _ze()
+    if ze is not None:
+        for var, label, color, ls in [
+            ("eps1",     "ε₁",    "#e6194b", "--"),
+            ("eps2",     "ε₂",    "#4363d8", ":"),
+            ("eps_best", "ε best","k",        "-"),
+        ]:
+            v = _get(var)
+            if v is not None:
+                valid = np.isfinite(v) & (v > 0)
+                if valid.any():
+                    ax.semilogx(v[valid], ze[valid], color=color, ls=ls,
+                                lw=1.2, marker="o", ms=2.5, label=label)
+    ax.set_xlabel("ε (W kg⁻¹)")
+    ax.legend(fontsize=7, loc="lower right")
+    ax.grid(True, which="both", alpha=0.25)
+
+    # ── panel 5: turbidity ──
+    ax = axes[4]
+    v = _get("turbidity_bin") if zb is not None else _get("turbidity")
+    z = zb if zb is not None else _zf()
+    if v is not None and z is not None:
+        ax.plot(v, z, color="#911eb4", lw=1.5)
+    ax.set_xlabel("Turbidity (FTU)")
+    ax.grid(True, alpha=0.25)
+
+    # ── panel 6: chlorophyll ──
+    ax = axes[5]
+    v = _get("chlorophyll_bin") if zb is not None else _get("chlorophyll")
+    z = zb if zb is not None else _zf()
+    if v is not None and z is not None:
+        ax.plot(v, z, color="#2ecc71", lw=1.5)
+    ax.set_xlabel("Chlorophyll-a (ppb)")
+    ax.grid(True, alpha=0.25)
+
+    # ── shared y-axis ──
+    axes[0].invert_yaxis()
+    axes[0].set_ylabel("Pressure (dbar)")
+    fig.suptitle(f"Profile overview — {station}", fontsize=11)
+    fig.tight_layout()
+    return fig
+
+
 # ─── master function ────────────────────────────────────────────────────────────
 
 def plot_all(
@@ -334,6 +447,7 @@ def plot_all(
         plt.close(fig)
         saved[name] = path
 
+    _save(plot_profile_overview(ds), "profile_overview")
     _save(plot_ts(ds), "ts_diagram")
     _save(plot_ts_gade(ds, T_AW=gade_T_AW, S_AW=gade_S_AW, T_ice=gade_T_ice), "ts_gade")
     if ts_scalar in ds:
