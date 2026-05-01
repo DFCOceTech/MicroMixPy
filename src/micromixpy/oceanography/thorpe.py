@@ -2,72 +2,72 @@
 
 from __future__ import annotations
 
+import warnings
+
 import numpy as np
+from mixsea.overturn import thorpe_scale as _mixsea_thorpe_scale
+
+# Typical sigma0 noise floor for a JAC CTD (combined T/C uncertainty ~ 0.001 kg m⁻³)
+_DEFAULT_DNOISE: float = 0.001
 
 
 def compute_thorpe_scales(
     density: np.ndarray,
     depth: np.ndarray,
+    dnoise: float = _DEFAULT_DNOISE,
 ) -> tuple[np.ndarray, np.ndarray]:
-    """Compute Thorpe displacements and Thorpe scales from a density profile.
+    """Compute Thorpe displacements and Thorpe scales via mixsea.
 
-    The Thorpe scale Lt = rms(d) over each overturn, where d is the vertical
-    displacement needed to sort the density profile to stable order.
+    Wraps mixsea.overturn.thorpe_scale, which uses the intermediate-profile
+    method and returns the Gargett & Garner overturn ratio alongside the
+    standard Thorpe diagnostics.
 
     Parameters
     ----------
-    density : potential density anomaly (kg/m³), may be non-monotonic
-    depth   : depth (m or dbar), same length as density
+    density : potential density anomaly σ₀ (kg m⁻³)
+    depth   : pressure or depth (dbar / m), monotonically increasing downward
+    dnoise  : density noise floor (kg m⁻³); patches with density span < dnoise
+              are treated as spurious and set to zero (default 0.001)
 
     Returns
     -------
-    thorpe_disp  : Thorpe displacement at each sample (m); NaN for invalid samples
-    thorpe_scale : Thorpe scale (rms displacement) per sample (m); 0 outside overturns
+    thorpe_disp  : Thorpe displacement at each sample (m)
+    thorpe_scale : Thorpe scale Lt (rms displacement) per sample (m);
+                   0 outside overturns or where patch is noise-flagged
     """
     n = len(density)
     thorpe_disp_out = np.zeros(n)
     thorpe_scale_out = np.zeros(n)
 
     valid = np.isfinite(density) & np.isfinite(depth)
-    n_valid = valid.sum()
-    if n_valid < 4:
+    if valid.sum() < 4:
         return thorpe_disp_out, thorpe_scale_out
 
-    # Work only on valid samples to prevent NaN corruption in argsort
     d_v = density[valid]
     z_v = depth[valid]
-    n_v = n_valid
 
-    dz_median = float(np.median(np.abs(np.diff(z_v))))
-    if dz_median == 0:
+    # mixsea requires monotonically increasing depth
+    if not np.all(np.diff(z_v) >= 0):
+        warnings.warn("depth is not monotonically increasing; Thorpe scales not computed.")
         return thorpe_disp_out, thorpe_scale_out
 
-    # Sort valid density profile to stable order
-    sorted_idx = np.argsort(d_v, kind="stable")
-    # Inverse permutation: where does each original parcel end up?
-    inverse_perm = np.empty(n_v, dtype=int)
-    inverse_perm[sorted_idx] = np.arange(n_v)
+    # mixsea raises ValueError when q[0] > q[-1] (entire profile unstable)
+    if d_v[0] >= d_v[-1]:
+        return thorpe_disp_out, thorpe_scale_out
 
-    orig_pos = np.arange(n_v)
-    thorpe_disp_v = (inverse_perm - orig_pos) * dz_median
+    try:
+        Lt, thorpe_disp_v, _, noise_flag, _, _, _, _ = _mixsea_thorpe_scale(z_v, d_v, dnoise)
+    except Exception as exc:
+        warnings.warn(f"mixsea thorpe_scale failed: {exc}; returning zeros.")
+        return thorpe_disp_out, thorpe_scale_out
 
-    # Cumulative displacement — overturns are regions where cumsum ≠ 0
-    cum_disp = np.cumsum(thorpe_disp_v)
-    thorpe_scale_v = np.zeros(n_v)
+    # Zero out noise-flagged patches (density span < dnoise → likely spurious)
+    Lt[noise_flag] = 0.0
+    # mixsea returns NaN for non-overturn regions; convert to 0
+    Lt = np.where(np.isfinite(Lt), Lt, 0.0)
 
-    zero_crossings = np.where(np.diff(np.sign(cum_disp)))[0]
-    boundaries = np.concatenate([[0], zero_crossings + 1, [n_v]])
-
-    for i in range(len(boundaries) - 1):
-        sl = slice(boundaries[i], boundaries[i + 1])
-        seg_disp = thorpe_disp_v[sl]
-        if np.any(seg_disp != 0):
-            lt = np.sqrt(np.mean(seg_disp**2))
-            thorpe_scale_v[sl] = lt
-
-    # Scatter results back to full-length output arrays
     thorpe_disp_out[valid] = thorpe_disp_v
-    thorpe_scale_out[valid] = thorpe_scale_v
+    thorpe_scale_out[valid] = Lt
 
     return thorpe_disp_out, thorpe_scale_out
 
