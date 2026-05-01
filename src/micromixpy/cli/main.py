@@ -56,6 +56,8 @@ def _build_parser() -> argparse.ArgumentParser:
                       help="Exclude epsilon/chi bins at or above this pressure (dbar).")
     proc.add_argument("--skip-missing-meta", action="store_true",
                       help="Warn but continue if a profile has no metadata entry")
+    proc.add_argument("--plot", action="store_true",
+                      help="Generate diagnostic plots for each profile after processing")
 
     # ---- plot ----
     plot_p = sub.add_parser("plot", help="Generate diagnostic plots from a processed netCDF file.")
@@ -111,13 +113,34 @@ def _cmd_info(args: argparse.Namespace) -> int:
 
 def _resolve_mat_path(filename: str, mat_dir: str) -> Path:
     p = Path(filename)
+    if p.suffix.lower() != ".mat":
+        p = p.with_suffix(".mat")
     if p.is_absolute() or p.exists():
         return p
     if mat_dir:
-        candidate = Path(mat_dir) / p
+        candidate = Path(mat_dir) / p.name
         if candidate.exists():
             return candidate
     return p
+
+
+def _run_plots(nc_path: Path, cfg: dict) -> None:
+    import xarray as xr
+    from ..diagnostics.plots import plot_all
+
+    gade = cfg["gade"]
+    plots = cfg["plots"]
+    ds = xr.open_dataset(nc_path)
+    out_dir = nc_path.parent / nc_path.stem
+    saved = plot_all(
+        ds, out_dir,
+        gade_T_AW=gade.get("T_AW"),
+        gade_S_AW=gade.get("S_AW"),
+        gade_T_ice=gade.get("T_ice", -2.0),
+        ts_scalar=plots.get("ts_scalar", "turbidity_bin"),
+    )
+    ds.close()
+    print(f"    {len(saved)} plots → {out_dir}/")
 
 
 def _cmd_process(args: argparse.Namespace, cfg: dict) -> int:
@@ -201,6 +224,8 @@ def _cmd_process(args: argparse.Namespace, cfg: dict) -> int:
                 out_path = output_dir / f"{mat.file_stem}_P{dc.profile_number:02d}_{station}.nc"
                 write_profile_netcdf(out_path, result, profile_meta)
                 print(f"→ {out_path.name}")
+                if args.plot:
+                    _run_plots(out_path, cfg)
             except Exception as exc:
                 print(f"ERROR: {exc}", file=sys.stderr)
                 errors += 1
