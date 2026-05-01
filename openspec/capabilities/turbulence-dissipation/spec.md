@@ -8,9 +8,11 @@
 
 ## Requirements
 
-### REQ-TDISS-001 — Epsilon via Nasmyth spectral fitting
+### REQ-TDISS-001 — Epsilon via Nasmyth spectral fitting over fixed 5–40 cpm band
 Epsilon SHALL be estimated per depth bin by fitting the Nasmyth (1970) universal
-shear spectrum to the observed shear PSD via iterative least-squares in log space.
+shear spectrum to the observed shear PSD over the fixed wavenumber band 5 ≤ k ≤ 40 cpm
+using log-space least-squares minimisation.  The fixed band avoids low-frequency ship/
+mooring contamination (< 5 cpm) and the viscous sub-range (> 40 cpm).
 
 ### REQ-TDISS-002 — Chi via temperature gradient PSD integration
 Chi SHALL be estimated per depth bin by integrating the calibrated FP07 temperature
