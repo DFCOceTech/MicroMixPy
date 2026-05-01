@@ -34,11 +34,25 @@ def _build_parser() -> argparse.ArgumentParser:
                       help="Method for chi estimation: 'batchelor' (default, fits Batchelor spectrum "
                            "to temperature gradient PSD, also yields eps_batchelor) or "
                            "'direct' (integrates observed PSD).")
+    proc.add_argument("--coherence-threshold", type=float, default=0.5, metavar="COH",
+                      help="Inter-thermistor coherence threshold for chi quality flag (0-1, default 0.5).")
     proc.add_argument("--exclude-above", type=float, default=0.0, metavar="DBAR",
                       help="Exclude epsilon/chi bins at or above this pressure (dbar ≈ m). "
                            "Use to remove ship-hull-generated turbulence near the surface.")
     proc.add_argument("--skip-missing-meta", action="store_true",
                       help="Warn but continue if a profile has no metadata entry")
+
+    # ---- plot ----
+    plot_p = sub.add_parser("plot", help="Generate diagnostic plots from a processed netCDF file.")
+    plot_p.add_argument("nc_files", nargs="+", help="Processed .nc file(s)")
+    plot_p.add_argument("--gade-T-AW", type=float, default=None, metavar="DEGC",
+                        help="Atlantic Water temperature end-member for Gade line (default: max in profile)")
+    plot_p.add_argument("--gade-S-AW", type=float, default=None, metavar="G_KG",
+                        help="Atlantic Water salinity end-member (default: max in profile)")
+    plot_p.add_argument("--gade-T-ice", type=float, default=-2.0, metavar="DEGC",
+                        help="Ice temperature for Gade line (default: -2°C)")
+    plot_p.add_argument("--ts-scalar", default="turbidity_bin",
+                        help="Binned variable to colour the T-S scatter plot (default: turbidity_bin)")
 
     # ---- info ----
     info = sub.add_parser("info", help="Print .mat file variable summary.")
@@ -118,6 +132,7 @@ def _cmd_process(args: argparse.Namespace) -> int:
                     nperseg=args.nperseg,
                     exclude_above_dbar=args.exclude_above,
                     chi_method=args.chi_method,
+                    coherence_threshold=args.coherence_threshold,
                 )
                 out_path = output_dir / f"{mat.file_stem}_P{dc.profile_number:02d}_{station}.nc"
                 write_profile_netcdf(out_path, result, profile_meta)
@@ -129,6 +144,30 @@ def _cmd_process(args: argparse.Namespace) -> int:
     return 1 if errors else 0
 
 
+def _cmd_plot(args) -> int:
+    import xarray as xr
+    from ..diagnostics.plots import plot_all
+    errors = 0
+    for nc_path in args.nc_files:
+        nc_path = Path(nc_path)
+        try:
+            ds = xr.open_dataset(nc_path)
+            out_dir = nc_path.parent / nc_path.stem
+            saved = plot_all(
+                ds, out_dir,
+                gade_T_AW=args.gade_T_AW,
+                gade_S_AW=args.gade_S_AW,
+                gade_T_ice=args.gade_T_ice,
+                ts_scalar=args.ts_scalar,
+            )
+            ds.close()
+            print(f"{nc_path.name}: {len(saved)} plots → {out_dir}/")
+        except Exception as exc:
+            print(f"ERROR plotting {nc_path.name}: {exc}", file=sys.stderr)
+            errors += 1
+    return 1 if errors else 0
+
+
 def main(argv: list[str] | None = None) -> None:
     parser = _build_parser()
     args = parser.parse_args(argv)
@@ -137,3 +176,5 @@ def main(argv: list[str] | None = None) -> None:
         sys.exit(_cmd_info(args))
     elif args.command == "process":
         sys.exit(_cmd_process(args))
+    elif args.command == "plot":
+        sys.exit(_cmd_plot(args))

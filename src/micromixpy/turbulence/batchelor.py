@@ -18,6 +18,11 @@ from scipy.optimize import minimize
 
 
 _Q: float = 3.7        # Oakey (1982) spectral shape constant
+
+# Standard wavenumber band for Batchelor fitting (same rationale as Nasmyth 5-40 cpm,
+# but extended upward since temperature diffuses at smaller scales than velocity).
+K_BATCHELOR_MIN: float = 5.0    # cpm — lower bound (avoid low-freq contamination)
+K_BATCHELOR_MAX: float = 100.0  # cpm — upper bound (well into viscous-diffusive range)
 _NU: float = 1.0e-6    # kinematic viscosity (m²/s)
 _KAPPA_T: float = 1.4e-7  # thermal diffusivity (m²/s)
 

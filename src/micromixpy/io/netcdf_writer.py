@@ -72,6 +72,7 @@ def write_profile_netcdf(
             ("thorpe_scale", {"units": "m", "long_name": "Thorpe scale"}),
             ("thorpe_disp", {"units": "m", "long_name": "Thorpe displacement"}),
             ("staircase_flag", {"units": "1", "long_name": "thermohaline staircase flag"}),
+            ("Turner_angle", {"units": "degrees", "long_name": "Turner angle (positive=salt fingering)"}),
         ]:
             if name in result:
                 ds_vars[name] = xr.Variable("z_bin", result[name], attrs=attrs)
@@ -89,10 +90,18 @@ def write_profile_netcdf(
             ("eps1", {"units": "W kg-1", "long_name": "epsilon from shear probe 1 (Nasmyth fit)"}),
             ("eps2", {"units": "W kg-1", "long_name": "epsilon from shear probe 2 (Nasmyth fit)"}),
             ("eps_best", {"units": "W kg-1", "long_name": "best-estimate epsilon (minimum of eps1, eps2)"}),
-            ("chi1", {"units": "K2 s-1", "long_name": "chi from FP07 thermistor 1"}),
-            ("chi2", {"units": "K2 s-1", "long_name": "chi from FP07 thermistor 2"}),
-            ("eps_batchelor1", {"units": "W kg-1", "long_name": "epsilon from Batchelor fit of FP07 T1 gradient spectrum"}),
-            ("eps_batchelor2", {"units": "W kg-1", "long_name": "epsilon from Batchelor fit of FP07 T2 gradient spectrum"}),
+            ("chi1_raw", {"units": "K2 s-1", "long_name": "chi T1 before coherence masking"}),
+            ("chi2_raw", {"units": "K2 s-1", "long_name": "chi T2 before coherence masking"}),
+            ("chi1", {"units": "K2 s-1", "long_name": "chi from FP07 thermistor 1 (coherence-masked)"}),
+            ("chi2", {"units": "K2 s-1", "long_name": "chi from FP07 thermistor 2 (coherence-masked)"}),
+            ("chi_best", {"units": "K2 s-1", "long_name": "best-estimate chi (log-mean of passing probes)"}),
+            ("eps_batchelor1", {"units": "W kg-1", "long_name": "epsilon from Batchelor fit of T1 gradient spectrum"}),
+            ("eps_batchelor2", {"units": "W kg-1", "long_name": "epsilon from Batchelor fit of T2 gradient spectrum"}),
+            ("chi_coherence", {"units": "1", "long_name": "inter-thermistor spectral coherence (0-1)"}),
+            ("chi_flag", {"units": "1", "long_name": "chi coherence quality flag (1=low coherence, rejected)"}),
+            ("regime", {"units": "1", "long_name": "mixing regime (0=indeterminate,1=turbulent,2=double_diffusion,3=weak)",
+                        "flag_values": "0 1 2 3",
+                        "flag_meanings": "indeterminate turbulent_mixing double_diffusion weak_mixing"}),
             ("eps_accel_flag", {"units": "1", "long_name": "epsilon bin contaminated by acceleration"}),
         ]:
             if name in result:
