@@ -4,6 +4,7 @@ REQ-OCEAN-001: CT, SA, sigma0 computed via TEOS-10 for realistic Arctic values.
 REQ-OCEAN-002: Thorpe scale is zero for a stably-stratified profile.
 REQ-OCEAN-003: Thorpe scale is non-zero for a density inversion.
 REQ-OCEAN-004: Binning returns correct number of bins and NaN for empty bins.
+REQ-TDISS-008: Thorpe scale computation tolerates minor pressure reversals.
 """
 
 import numpy as np
@@ -52,6 +53,23 @@ class TestThorpeScales:
         density[30:50] = density[50:30:-1]
         _, Lt = compute_thorpe_scales(density, depth)
         assert Lt.max() > 0.0
+
+    def test_nonmonotonic_depth_does_not_skip(self):
+        """SCENARIO-TDISS-008-A: single-sample pressure reversal must not cause all-zeros."""
+        depth = np.linspace(0, 100, 200)
+        density = 1025.0 + 0.01 * depth  # stable
+        # Introduce a single-sample reversal (< 0.1 dbar)
+        depth[100] = depth[99] - 0.05
+        _, Lt = compute_thorpe_scales(density, depth)
+        # Stable profile → Thorpe scale should be zero everywhere, but the function
+        # must reach that result via normal computation, not the early-return guard.
+        # We verify by also checking an inversion case gives non-zero with the same reversal.
+        depth2 = np.linspace(0, 20, 100)
+        density2 = 1025.0 + 0.1 * depth2
+        density2[30:50] = density2[50:30:-1]
+        depth2[10] = depth2[9] - 0.02  # reversal
+        _, Lt2 = compute_thorpe_scales(density2, depth2)
+        assert Lt2.max() > 0.0, "Non-monotonic depth should not suppress Thorpe scale computation"
 
 
 class TestBinning:
