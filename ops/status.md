@@ -1,16 +1,16 @@
 # Operational Status — MicroMixPy
 
-> Last updated: 2026-04-30
+> Last updated: 2026-05-03
 
 ## What's Working
 
 - Full processing pipeline: `.mat` → netCDF4
 - Data loading: `load_mat` reads all ODAS quicklook variables in physical units
-- Downcast extraction: surface soak removal, downcast identification, acceleration flagging
+- Downcast extraction: surface soak removal, downcast identification, acceleration flagging, deceleration flagging (tether-contamination exclusion)
 - FP07 calibration: linear regression against JAC-T
 - Optical despiking: chlorophyll and turbidity via median-filter MAD
 - Oceanographic properties: CT, SA, sigma0 via TEOS-10 (gsw)
-- Thorpe scales: density reordering method
+- Thorpe scales: density reordering method; tolerates minor pressure reversals via sort+inverse-sort
 - Thermohaline staircase detection: step-detection on fast temperature profile
 - Binning: 0.25 dbar uniform grid
 - Buoyancy frequency N² via gsw.Nsquared
@@ -19,7 +19,7 @@
 - Best-estimate epsilon: minimum of probe 1 and probe 2
 - netCDF4 output: CF-1.8 conventions, all variables with units/long_name
 - CLI: `micromixpy process` and `micromixpy info`
-- 19/19 unit tests passing
+- 58/58 unit tests passing
 
 ## E2E Test Result (2026-04-30)
 
