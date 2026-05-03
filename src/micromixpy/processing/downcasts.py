@@ -61,6 +61,21 @@ def _acceleration_flag(W_smooth: np.ndarray, frac: float = 0.90) -> np.ndarray:
     return flag
 
 
+def _deceleration_flag(W_smooth: np.ndarray, frac: float = 0.90) -> np.ndarray:
+    """Flag samples where profiler has decelerated below terminal velocity.
+
+    Symmetric counterpart to _acceleration_flag. Flags samples after the last
+    point where W exceeds frac * W_terminal — i.e., where tether tension and
+    profiler deceleration contaminate shear measurements.
+    """
+    W_terminal = np.nanmedian(W_smooth)
+    flag = np.zeros(len(W_smooth), dtype=bool)
+    above = np.where(W_smooth >= frac * W_terminal)[0]
+    if len(above) > 0:
+        flag[above[-1] + 1 :] = True
+    return flag
+
+
 def extract_downcasts(
     mat,  # MatData
     surface_threshold: float = 2.0,
@@ -122,7 +137,7 @@ def extract_downcasts(
 
         profile_num += 1
         seg_W_smooth = W_smooth[i_start:i_end]
-        accel = _acceleration_flag(seg_W_smooth)
+        accel = _acceleration_flag(seg_W_smooth) | _deceleration_flag(seg_W_smooth)
 
         sl = _slow_slice(seg_t[0], seg_t[-1])
 
