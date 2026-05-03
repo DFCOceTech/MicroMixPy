@@ -5,12 +5,14 @@ REQ-PROC-002: Downcast extraction identifies contiguous falling segments.
 REQ-PROC-003: Acceleration flag marks early profile before terminal velocity.
 REQ-PROC-004: FP07 calibration reduces bias against JAC-T.
 REQ-PROC-005: Optical despiking removes isolated outliers without distorting the signal.
+REQ-TDISS-007: Deceleration flag at end of downcast excludes tether-contaminated bins.
 """
 
 import numpy as np
 import pytest
 
 from micromixpy.processing.calibration import calibrate_fp07
+from micromixpy.processing.downcasts import _deceleration_flag
 from micromixpy.processing.optics import despike
 
 
@@ -32,6 +34,43 @@ class TestCalibrateF07:
         T_fp07 = np.full(5, np.nan)
         T_cal = calibrate_fp07(T_fp07, np.arange(5.0), np.array([1.0]), np.array([0.0]))
         assert np.all(np.isnan(T_cal))
+
+
+class TestDecelerationFlag:
+    """SCENARIO-TDISS-007-A, SCENARIO-TDISS-007-B"""
+
+    def test_ramp_down_flags_tail(self):
+        """SCENARIO-TDISS-007-A: deceleration tail is flagged when W ramps to zero."""
+        n = 100
+        W = np.ones(n) * 0.6  # terminal velocity 0.6 m/s
+        # Ramp the last 20 samples from 0.6 to 0.0
+        W[80:] = np.linspace(0.6, 0.0, 20)
+        flag = _deceleration_flag(W, frac=0.90)
+        # At frac=0.90 and W_terminal≈0.6, threshold is 0.54.
+        # Samples drop below 0.54 by index ~82; flag must cover the clear tail.
+        assert flag[85:].all(), "Clearly decelerated tail should be flagged"
+        assert not flag[:80].any(), "Terminal-velocity region should not be flagged"
+
+    def test_constant_velocity_flags_nothing(self):
+        """SCENARIO-TDISS-007-B: constant fall speed → no samples flagged."""
+        W = np.ones(200) * 0.6
+        flag = _deceleration_flag(W, frac=0.90)
+        assert not flag.any(), "Steady fall should flag nothing"
+
+    def test_accel_decel_do_not_overlap_on_normal_profile(self):
+        """Accel and decel flags should leave a clean middle section for a typical profile."""
+        from micromixpy.processing.downcasts import _acceleration_flag
+        n = 200
+        W = np.concatenate([
+            np.linspace(0.0, 0.6, 20),   # acceleration
+            np.ones(160) * 0.6,           # terminal
+            np.linspace(0.6, 0.0, 20),   # deceleration
+        ])
+        accel = _acceleration_flag(W)
+        decel = _deceleration_flag(W)
+        combined = accel | decel
+        # At least 50 % of samples should be clean
+        assert combined.sum() < n // 2
 
 
 class TestDespike:

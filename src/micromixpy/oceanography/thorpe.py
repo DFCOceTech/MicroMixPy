@@ -46,17 +46,20 @@ def compute_thorpe_scales(
     d_v = density[valid]
     z_v = depth[valid]
 
-    # mixsea requires monotonically increasing depth
-    if not np.all(np.diff(z_v) >= 0):
-        warnings.warn("depth is not monotonically increasing; Thorpe scales not computed.")
-        return thorpe_disp_out, thorpe_scale_out
+    # Sort by depth if not monotonic (minor reversals from heave / attitude noise)
+    sort_idx = np.argsort(z_v, kind="stable")
+    inverse_sort = np.argsort(sort_idx, kind="stable")
+    z_sorted = z_v[sort_idx]
+    d_sorted = d_v[sort_idx]
 
     # mixsea raises ValueError when q[0] > q[-1] (entire profile unstable)
-    if d_v[0] >= d_v[-1]:
+    if d_sorted[0] >= d_sorted[-1]:
         return thorpe_disp_out, thorpe_scale_out
 
     try:
-        Lt, thorpe_disp_v, _, noise_flag, _, _, _, _ = _mixsea_thorpe_scale(z_v, d_v, dnoise)
+        Lt, thorpe_disp_v, _, noise_flag, _, _, _, _ = _mixsea_thorpe_scale(
+            z_sorted, d_sorted, dnoise
+        )
     except Exception as exc:
         warnings.warn(f"mixsea thorpe_scale failed: {exc}; returning zeros.")
         return thorpe_disp_out, thorpe_scale_out
@@ -66,8 +69,9 @@ def compute_thorpe_scales(
     # mixsea returns NaN for non-overturn regions; convert to 0
     Lt = np.where(np.isfinite(Lt), Lt, 0.0)
 
-    thorpe_disp_out[valid] = thorpe_disp_v
-    thorpe_scale_out[valid] = Lt
+    # Map sorted results back to original index order
+    thorpe_disp_out[valid] = thorpe_disp_v[inverse_sort]
+    thorpe_scale_out[valid] = Lt[inverse_sort]
 
     return thorpe_disp_out, thorpe_scale_out
 
